@@ -20,18 +20,38 @@ Most prompt tools are glorified text editors. PromptForge brings **engineering d
 
 ## Quick Start
 
-**One-line Docker setup:**
+### Option 1: Pre-built Binary (Recommended)
 ```bash
-docker run -d -p 8080:8080 -e ANTHROPIC_API_KEY="your-key" ghcr.io/insaanimanav/prompt-forge:main
+# Download the appropriate binary for your platform
+# Windows: promptforge-v1.0.1-windows-amd64.tar.gz
+# Linux: promptforge-v1.0.1-linux-amd64.tar.gz
+# macOS: promptforge-v1.0.1-darwin-amd64.tar.gz (Intel)
+# macOS: promptforge-v1.0.1-darwin-arm64.tar.gz (Apple Silicon)
+
+# Extract and run
+tar -xzf promptforge-*.tar.gz
+cp .env.example .env  # Configure your API keys
+./promptforge          # or promptforge.exe on Windows
 ```
 
-**Or clone and run:**
+### Option 2: Build from Source
 ```bash
 git clone https://github.com/insaanimanav/promptforge.git
 cd promptforge && ./start.sh
 ```
 
+### Option 3: Docker
+```bash
+docker run -d -p 8080:8080 -e ANTHROPIC_API_KEY="your-key" ghcr.io/insaanimanav/prompt-forge:main
+```
+
 Open `http://localhost:8080` and start crafting better prompts.
+
+**🔨 New: Single Binary Deployment!**
+- Frontend is now embedded in the binary
+- Just copy binary + .env file to deploy
+- Cross-platform builds available
+- See [BUILD.md](BUILD.md) for detailed build instructions
 
 ## Core Features
 
