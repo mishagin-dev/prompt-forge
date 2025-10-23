@@ -42,7 +42,7 @@ cd promptforge && ./start.sh
 
 ### Option 3: Docker
 ```bash
-docker run -d -p 8080:8080 -e ANTHROPIC_API_KEY="your-key" ghcr.io/insaanimanav/prompt-forge:main
+docker run -d -p 8080:8080 -e ANTHROPIC_API_KEY="your-key" ghcr.io/mishagin-dev/prompt-forge:main
 ```
 
 Open `http://localhost:8080` and start crafting better prompts.
