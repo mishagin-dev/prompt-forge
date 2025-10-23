@@ -12,7 +12,6 @@ const (
 	ProviderOpenAI      AIProvider = "openai"
 	ProviderAzureOpenAI AIProvider = "azure-openai"
 	ProviderAnthropic   AIProvider = "anthropic"
-	ProviderOllama      AIProvider = "ollama"
 )
 
 // Configuration structure
@@ -21,7 +20,6 @@ type Config struct {
 	OpenAI          OpenAIConfig
 	AzureOpenAI     AzureOpenAIConfig
 	Anthropic       AnthropicConfig
-	Ollama          OllamaConfig
 }
 
 type OpenAIConfig struct {
@@ -38,10 +36,6 @@ type AzureOpenAIConfig struct {
 type AnthropicConfig struct {
 	APIKey  string
 	BaseURL string // Optional, for custom endpoints
-}
-
-type OllamaConfig struct {
-	BaseURL string // Base URL for Ollama instance
 }
 
 // Global configuration instance
@@ -64,9 +58,6 @@ func InitConfig() {
 			APIKey:  getEnv("ANTHROPIC_API_KEY", ""),
 			BaseURL: getEnv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
 		},
-		Ollama: OllamaConfig{
-			BaseURL: getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
-		},
 	}
 }
 
@@ -79,8 +70,6 @@ func getDefaultProvider() AIProvider {
 		return ProviderAzureOpenAI
 	case "anthropic":
 		return ProviderAnthropic
-	case "ollama":
-		return ProviderOllama
 	default:
 		return ProviderAnthropic
 	}
