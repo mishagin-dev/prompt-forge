@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"promptforge/internal/models"
 
@@ -15,7 +17,25 @@ type Database struct {
 }
 
 func NewDatabase() (*Database, error) {
-	db, err := sql.Open("sqlite3", "./promptforge.db")
+	// Get database name from environment variable or use default
+	dbName := os.Getenv("DATABASE_NAME")
+	if dbName == "" {
+		dbName = "promptforge.db"
+	}
+
+	// Create db directory if it doesn't exist
+	dbDir := "db"
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create db directory: %v", err)
+	}
+
+	// Construct full database path
+	dbPath := filepath.Join(dbDir, dbName)
+
+	// Log database path for debugging
+	fmt.Printf("📊 Database: %s\n", dbPath)
+
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %v", err)
 	}
