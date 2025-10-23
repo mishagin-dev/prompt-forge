@@ -36,6 +36,9 @@ jobs:
         working-directory: ./api
         run: go mod tidy
 
+      - name: 📁 Copy frontend files
+        run: cp -r frontend api/
+
       - name: 🏗️ Build application
         working-directory: ./api
         run: go build -v .
