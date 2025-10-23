@@ -43,6 +43,9 @@ jobs:
         working-directory: ./api
         run: go build -v .
 
+      - name: 📁 Copy frontend files
+        run: cp -r frontend api/
+
       - name: 🧪 Run tests
         working-directory: ./api
         run: |
