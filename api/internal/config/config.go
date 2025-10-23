@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 // Provider types
@@ -12,7 +15,6 @@ const (
 	ProviderOpenAI      AIProvider = "openai"
 	ProviderAzureOpenAI AIProvider = "azure-openai"
 	ProviderAnthropic   AIProvider = "anthropic"
-	ProviderOllama      AIProvider = "ollama"
 )
 
 // Configuration structure
@@ -21,7 +23,6 @@ type Config struct {
 	OpenAI          OpenAIConfig
 	AzureOpenAI     AzureOpenAIConfig
 	Anthropic       AnthropicConfig
-	Ollama          OllamaConfig
 }
 
 type OpenAIConfig struct {
@@ -40,15 +41,18 @@ type AnthropicConfig struct {
 	BaseURL string // Optional, for custom endpoints
 }
 
-type OllamaConfig struct {
-	BaseURL string // Base URL for Ollama instance
-}
-
 // Global configuration instance
 var AppConfig *Config
 
 // Initialize configuration from environment variables
 func InitConfig() {
+	// Load .env file - try multiple possible locations
+	err := loadEnvFile()
+	if err != nil {
+		log.Printf("Warning: Could not load .env file: %v", err)
+		log.Println("Note: Make sure .env file exists in the project root or set environment variables manually")
+	}
+
 	AppConfig = &Config{
 		DefaultProvider: getDefaultProvider(),
 		OpenAI: OpenAIConfig{
@@ -64,10 +68,20 @@ func InitConfig() {
 			APIKey:  getEnv("ANTHROPIC_API_KEY", ""),
 			BaseURL: getEnv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
 		},
-		Ollama: OllamaConfig{
-			BaseURL: getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
-		},
 	}
+}
+
+// loadEnvFile tries to load .env file from current directory
+func loadEnvFile() error {
+	// Load .env file from current directory (same location as binary)
+	if err := godotenv.Load(".env"); err == nil {
+		log.Println("Successfully loaded .env file from current directory")
+		return nil
+	}
+
+	// If no .env file found, that's not necessarily an error
+	// Environment variables might be set directly in the system
+	return fmt.Errorf("no .env file found in current directory")
 }
 
 func getDefaultProvider() AIProvider {
@@ -79,8 +93,6 @@ func getDefaultProvider() AIProvider {
 		return ProviderAzureOpenAI
 	case "anthropic":
 		return ProviderAnthropic
-	case "ollama":
-		return ProviderOllama
 	default:
 		return ProviderAnthropic
 	}
