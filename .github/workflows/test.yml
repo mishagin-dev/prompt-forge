@@ -22,19 +22,34 @@ jobs:
           go-version: '1.21'
           cache-dependency-path: api/go.sum
 
-      - name: 📦 Cache Go modules
+      - name: 📦 Cache Go modules and build cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('api/go.sum') }}
+            ~/go/bin
+          key: ${{ runner.os }}-go-1.21-${{ hashFiles('api/go.sum', 'api/go.mod') }}
           restore-keys: |
-            ${{ runner.os }}-go-
+            ${{ runner.os }}-go-1.21-
+
+      - name: 🔍 Verify Go module structure
+        working-directory: ./api
+        run: |
+          echo "📁 Current directory contents:"
+          ls -la
+          echo ""
+          echo "🐹 Go module info:"
+          go list -m
+          echo ""
+          echo "📦 Go mod verify:"
+          go mod verify || true
 
       - name: 🔧 Install dependencies
         working-directory: ./api
-        run: go mod tidy
+        run: |
+          go mod tidy
+          go mod download
 
       - name: 📁 Copy frontend files
         run: cp -r frontend api/
@@ -43,13 +58,20 @@ jobs:
         working-directory: ./api
         run: go build -v .
 
-      - name: 📁 Copy frontend files
-        run: cp -r frontend api/
-
       - name: 🧪 Run tests
         working-directory: ./api
         run: |
-          go test -v -race -coverprofile=coverage.out ./...
+          echo "🔍 Running tests with module: $(go list -m)"
+          echo "📁 Working directory: $(pwd)"
+          echo "📂 Directory listing:"
+          ls -la
+          echo ""
+          echo "🧪 Starting test execution..."
+          go test -v -race -coverprofile=coverage.out ./... || {
+            echo "❌ Tests failed, checking for issues..."
+            go mod verify
+            exit 1
+          }
           go tool cover -func=coverage.out
 
       - name: 📊 Generate coverage report
