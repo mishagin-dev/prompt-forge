@@ -77,6 +77,7 @@ Creates comprehensive test suites including:
 
 # OpenAI  
 -e OPENAI_API_KEY="sk-..."
+-e OPENAI_BASE_URL="https://api.openai.com/v1"
 
 # Azure OpenAI
 -e AZURE_OPENAI_API_KEY="your-key"
