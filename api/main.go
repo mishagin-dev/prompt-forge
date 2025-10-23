@@ -1,7 +1,10 @@
 package main
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
 
 	"github.com/labstack/echo/v4"
@@ -12,6 +15,13 @@ import (
 	"promptforge/internal/handlers"
 	"promptforge/internal/services"
 )
+
+//go:embed frontend/*
+var frontendFS embed.FS
+
+// Build-time variables
+var version = "dev"
+var buildTime = "unknown"
 
 func main() {
 	// Initialize configuration
@@ -38,9 +48,6 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
-
-	// Serve static files
-	e.Static("/", "./frontend")
 
 	// API Routes
 	api := e.Group("/api")
@@ -74,6 +81,13 @@ func main() {
 	// Provider configuration route
 	api.GET("/providers", h.GetProviders)
 
+	// Serve embedded static files (must be after API routes)
+	frontendFiles, err := fs.Sub(frontendFS, "frontend")
+	if err != nil {
+		e.Logger.Fatal(err)
+	}
+	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(frontendFiles))))
+
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -85,6 +99,7 @@ func main() {
 	fmt.Printf("🧠 Enhanced prompt analyzer ready\n")
 	fmt.Printf("🤖 AI Providers: OpenAI, Azure OpenAI, Anthropic\n")
 	fmt.Printf("⚙️  Default Provider: %s\n", config.AppConfig.DefaultProvider)
+	fmt.Printf("🔖 Version: %s (built %s)\n", version, buildTime)
 
 	e.Logger.Fatal(e.Start(":" + port))
 }

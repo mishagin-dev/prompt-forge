@@ -9,23 +9,70 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 
-# Navigate to API directory
-cd api
+# Check if Make is available
+if command -v make &> /dev/null; then
+    echo "🏗️  Using Makefile for build..."
 
-# Install dependencies if needed
-echo "📦 Installing dependencies..."
-go mod tidy
+    # Build development version using Makefile
+    make dev
 
-# Start the server
-echo "🚀 Starting PromptForge server..."
-echo "📍 Server will be available at: http://localhost:8080"
-echo "🔍 Critique endpoint: http://localhost:8080/api/critique"
-echo "⚡ Execute endpoint: http://localhost:8080/api/execute"
-echo ""
-echo "Press Ctrl+C to stop the server"
-echo "================================"
+    # Copy .env file to project root (where the binary will be)
+    if [ -f ".env" ]; then
+        echo "📄 .env file already exists in project root"
+    else
+        if [ -f "api/.env" ]; then
+            cp api/.env .env
+            echo "📄 Copied .env file to project root"
+        else
+            echo "⚠️  No .env file found. Please create one from .env.example"
+        fi
+    fi
 
-# Build the binary
-go build -o ../prompt-forge main.go
+    echo "🚀 Starting PromptForge server..."
+    echo "📍 Server will be available at: http://localhost:8080"
+    echo "🔍 Critique endpoint: http://localhost:8080/api/critique"
+    echo "⚡ Execute endpoint: http://localhost:8080/api/execute"
+    echo ""
+    echo "Press Ctrl+C to stop the server"
+    echo "================================"
 
-cd .. && ./prompt-forge
+    # Start server
+    ./main
+else
+    echo "⚠️  Make not found, using fallback build method..."
+
+    # Navigate to API directory
+    cd api
+
+    # Install dependencies if needed
+    echo "📦 Installing dependencies..."
+    go mod tidy
+
+    # Build binary
+    go build -o ../main main.go
+
+    cd ..
+
+    # Copy .env file to project root (where the binary will be)
+    if [ -f ".env" ]; then
+        echo "📄 .env file already exists in project root"
+    else
+        if [ -f "api/.env" ]; then
+            cp api/.env .env
+            echo "📄 Copied .env file to project root"
+        else
+            echo "⚠️  No .env file found. Please create one from .env.example"
+        fi
+    fi
+
+    echo "🚀 Starting PromptForge server..."
+    echo "📍 Server will be available at: http://localhost:8080"
+    echo "🔍 Critique endpoint: http://localhost:8080/api/critique"
+    echo "⚡ Execute endpoint: http://localhost:8080/api/execute"
+    echo ""
+    echo "Press Ctrl+C to stop the server"
+    echo "================================"
+
+    # Start the server
+    ./main
+fi
