@@ -3,9 +3,11 @@ package database
 import (
 	"database/sql"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"promptforge/internal/config"
 	"promptforge/internal/models"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -406,4 +408,126 @@ func containsAt(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestPrepareDatabasePath(t *testing.T) {
+	tests := []struct {
+		name            string
+		inputPath       string
+		expectedDir     string
+		expectedFile    string
+		shouldCreateDir bool
+	}{
+		{
+			name:            "Simple filename",
+			inputPath:       "test.db",
+			expectedDir:     ".",
+			expectedFile:    "test.db",
+			shouldCreateDir: false,
+		},
+		{
+			name:            "Path with directory",
+			inputPath:       "data/test.db",
+			expectedDir:     "data",
+			expectedFile:    "test.db",
+			shouldCreateDir: true,
+		},
+		{
+			name:            "Nested directory path",
+			inputPath:       "db/prod/promptforge.db",
+			expectedDir:     "db/prod",
+			expectedFile:    "promptforge.db",
+			shouldCreateDir: true,
+		},
+		{
+			name:            "Absolute path",
+			inputPath:       "/tmp/test.db",
+			expectedDir:     "/tmp",
+			expectedFile:    "test.db",
+			shouldCreateDir: true,
+		},
+		{
+			name:            "Current directory with dot",
+			inputPath:       "./test.db",
+			expectedDir:     ".",
+			expectedFile:    "test.db",
+			shouldCreateDir: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clean up any created directories
+			defer func() {
+				if tt.shouldCreateDir {
+					os.RemoveAll(tt.expectedDir)
+				}
+			}()
+
+			result, err := PrepareDatabasePath(tt.inputPath)
+			if err != nil {
+				t.Fatalf("prepareDatabasePath() error = %v", err)
+			}
+
+			expectedPath := filepath.Join(tt.expectedDir, tt.expectedFile)
+			if result != expectedPath {
+				t.Errorf("prepareDatabasePath() = %v, want %v", result, expectedPath)
+			}
+
+			// Check if directory was created when expected
+			if tt.shouldCreateDir && tt.expectedDir != "." {
+				if _, err := os.Stat(tt.expectedDir); os.IsNotExist(err) {
+					t.Errorf("Expected directory %s to be created", tt.expectedDir)
+				}
+			}
+		})
+	}
+}
+
+func TestPrepareDatabasePathError(t *testing.T) {
+	// Test with invalid path that should cause an error
+	invalidPath := "/root/restricted/test.db" // This might fail on some systems
+
+	_, err := PrepareDatabasePath(invalidPath)
+	if err == nil {
+		t.Log("prepareDatabasePath() did not return error for restricted path (this might be expected on some systems)")
+	}
+}
+
+func TestNewDatabaseWithCustomPath(t *testing.T) {
+	// Test NewDatabase with a custom path
+	testDir := "test_db_dir"
+	testFile := "test.db"
+	testPath := filepath.Join(testDir, testFile)
+
+	// Clean up
+	defer func() {
+		os.RemoveAll(testDir)
+	}()
+
+	// Mock config
+	originalConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = originalConfig
+	}()
+
+	config.AppConfig = &config.Config{
+		DatabasePath: testPath,
+	}
+
+	db, err := NewDatabase()
+	if err != nil {
+		t.Fatalf("NewDatabase() error = %v", err)
+	}
+	defer db.Close()
+
+	// Verify the database file was created in the expected location
+	if _, err := os.Stat(testPath); os.IsNotExist(err) {
+		t.Errorf("Database file was not created at expected path: %s", testPath)
+	}
+
+	// Verify the directory was created
+	if _, err := os.Stat(testDir); os.IsNotExist(err) {
+		t.Errorf("Database directory was not created: %s", testDir)
+	}
 }

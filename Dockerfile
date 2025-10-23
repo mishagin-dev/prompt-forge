@@ -16,6 +16,9 @@ RUN go mod download
 # Copy source code
 COPY api/ .
 
+# Copy frontend files
+COPY frontend/ ./frontend/
+
 # Build the application with SQLite compatibility
 ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -tags="sqlite_omit_load_extension" -o main .
@@ -31,9 +34,6 @@ WORKDIR /root/
 
 # Copy the binary from builder stage
 COPY --from=builder /app/main .
-
-# Copy frontend files
-COPY frontend/ ./frontend/
 
 # Create directory for database
 RUN mkdir -p /data
