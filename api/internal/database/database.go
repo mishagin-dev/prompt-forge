@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"promptforge/internal/config"
 	"promptforge/internal/models"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
@@ -16,26 +17,43 @@ type Database struct {
 	db *sql.DB
 }
 
+// PrepareDatabasePath processes DATABASE_PATH variable, creates directories if needed
+// and returns the full path to the database file
+func PrepareDatabasePath(databasePath string) (string, error) {
+	// Split path into directory and filename
+	dir := filepath.Dir(databasePath)
+	filename := filepath.Base(databasePath)
+
+	// If no directory specified (just filename), use current directory
+	if dir == "." || dir == filename {
+		dir = "."
+	}
+
+	// Create directory if it doesn't exist
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create database directory %s: %v", dir, err)
+		}
+	}
+
+	// Return full path
+	return filepath.Join(dir, filename), nil
+}
+
 func NewDatabase() (*Database, error) {
-	// Get database name from environment variable or use default
-	dbName := os.Getenv("DATABASE_NAME")
-	if dbName == "" {
-		dbName = "promptforge.db"
+	// Get database path from config
+	databasePath := "./promptforge.db" // default fallback
+	if config.AppConfig != nil {
+		databasePath = config.AppConfig.DatabasePath
 	}
 
-	// Create db directory if it doesn't exist
-	dbDir := "db"
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create db directory: %v", err)
+	// Prepare database path (create directories if needed)
+	fullPath, err := PrepareDatabasePath(databasePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare database path: %v", err)
 	}
 
-	// Construct full database path
-	dbPath := filepath.Join(dbDir, dbName)
-
-	// Log database path for debugging
-	fmt.Printf("📊 Database: %s\n", dbPath)
-
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite3", fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %v", err)
 	}

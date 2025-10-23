@@ -20,6 +20,7 @@ const (
 // Configuration structure
 type Config struct {
 	DefaultProvider AIProvider
+	DatabasePath    string
 	OpenAI          OpenAIConfig
 	AzureOpenAI     AzureOpenAIConfig
 	Anthropic       AnthropicConfig
@@ -55,6 +56,7 @@ func InitConfig() {
 
 	AppConfig = &Config{
 		DefaultProvider: getDefaultProvider(),
+		DatabasePath:    getEnv("DATABASE_PATH", ".db/promptforge.db"),
 		OpenAI: OpenAIConfig{
 			APIKey:  getEnv("OPENAI_API_KEY", ""),
 			BaseURL: getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
