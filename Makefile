@@ -12,31 +12,28 @@ BUILD_DIR = build
 DIST_DIR = $(BUILD_DIR)/dist
 
 # Build targets
-.PHONY: build clean deps test run help all windows linux macos
+.PHONY: build clean clean-frontend deps test run help all windows linux macos dev package install
 
 # Default target
-all: clean deps windows linux macos
+all: clean deps windows linux macos package clean-frontend
 
 # Install dependencies
 deps:
 	@echo "📦 Installing dependencies..."
 	cd api && go mod tidy
-
-# Run development server
-run:
-	@echo "🚀 Starting development server..."
-	./start.sh
-
-# Test
-test:
-	@echo "🧪 Running tests..."
-	cd api && go test -v ./...
+	@echo "🔨 Copying frontend..."
+	@cp -r frontend api/
 
 # Clean build artifacts
 clean:
 	@echo "🧹 Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
 	rm -f main $(APP_NAME) $(APP_NAME).exe
+
+# Clean frontend files from api
+clean-frontend:
+	@echo "🗑️  Cleaning frontend from api..."
+	@rm -rf api/frontend
 
 # Windows build
 windows: deps
@@ -68,49 +65,62 @@ build: deps
 	cd api && go build $(LDFLAGS) -o ../$(APP_NAME) main.go
 	@echo "✅ Binary created: $(APP_NAME)"
 
-# Create distribution packages
-package: all
-	@echo "📦 Creating distribution packages..."
-	@mkdir -p $(BUILD_DIR)/packages
-
-	# Windows package
-	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64
-	@cp $(DIST_DIR)/windows/$(APP_NAME).exe $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/
-	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/.env
-	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-windows-amd64.tar.gz $(APP_NAME)-windows-amd64/
-
-	# Linux package
-	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64
-	@cp $(DIST_DIR)/linux/$(APP_NAME) $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64/
-	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64/.env
-	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-linux-amd64.tar.gz $(APP_NAME)-linux-amd64/
-
-	# macOS package (Intel)
-	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64
-	@cp $(DIST_DIR)/macos/$(APP_NAME) $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64/
-	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64/.env
-	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-darwin-amd64.tar.gz $(APP_NAME)-darwin-amd64/
-
-	# macOS package (Apple Silicon)
-	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64
-	@cp $(DIST_DIR)/macos/$(APP_NAME)-arm64 $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64/
-	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64/.env
-	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-darwin-arm64.tar.gz $(APP_NAME)-darwin-arm64/
-
-	@echo "✅ Distribution packages created in $(BUILD_DIR)/packages/"
-	@ls -la $(BUILD_DIR)/packages/
-
 # Development build (current platform)
 dev: deps
 	@echo "🔨 Building development version..."
 	cd api && go build -o ../main main.go
 	@echo "✅ Development binary created: main"
+	@echo "🗑️  Cleaning frontend from api..."
+	@rm -rf api/frontend
+
+# Run development server
+run:
+	@echo "🚀 Starting PromptForge server..."
+	@echo "📦 Database initialized successfully"
+	@echo "🧠 Enhanced prompt analyzer ready"
+	@echo "🤖 AI Providers: OpenAI, Azure OpenAI, Anthropic"
+	@echo "🚀 Starting PromptForge server..."
+	@echo "📍 Server will be available at: http://localhost:8080"
+	@echo "🔍 Critique endpoint: http://localhost:8080/api/critique"
+	@echo "⚡ Execute endpoint: http://localhost:8080/api/execute"
+	@echo ""
+	@echo "Press Ctrl+C to stop the server"
+	@echo "================================"
+	./start.sh
+
+# Test
+test:
+	@echo "🧪 Running tests..."
+	cd api && go test -v ./...
 
 # Install to /usr/local (for macOS/Linux)
 install: build
 	@echo "📥 Installing to /usr/local/bin..."
 	sudo cp $(APP_NAME) /usr/local/bin/
 	@echo "✅ $(APP_NAME) installed to /usr/local/bin/$(APP_NAME)"
+
+# Create distribution packages
+package: all
+	@echo "📦 Creating distribution packages..."
+	@mkdir -p $(BUILD_DIR)/packages
+	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64
+	@cp $(DIST_DIR)/windows/$(APP_NAME).exe $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/
+	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/.env
+	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-windows-amd64.tar.gz $(APP_NAME)-windows-amd64/
+	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64
+	@cp $(DIST_DIR)/linux/$(APP_NAME) $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64/
+	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64/.env
+	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-linux-amd64.tar.gz $(APP_NAME)-linux-amd64/
+	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64
+	@cp $(DIST_DIR)/macos/$(APP_NAME) $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64/
+	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64/.env
+	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-darwin-amd64.tar.gz $(APP_NAME)-darwin-amd64/
+	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64
+	@cp $(DIST_DIR)/macos/$(APP_NAME)-arm64 $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64/
+	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64/.env
+	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-darwin-arm64.tar.gz $(APP_NAME)-darwin-arm64/
+	@echo "✅ Distribution packages created in $(BUILD_DIR)/packages/"
+	@ls -la $(BUILD_DIR)/packages/
 
 # Show help
 help:
@@ -120,17 +130,19 @@ help:
 	@echo "  dev        - Build development version"
 	@echo "  windows    - Build for Windows (amd64)"
 	@echo "  linux      - Build for Linux (amd64)"
-	@echo "  macos      - Build for macOS (amd64 + arm64)"
+	@echo "  macos      - Build for macOS (Intel + Apple Silicon)"
 	@echo "  all        - Build for all platforms"
 	@echo "  package    - Create distribution packages"
 	@echo "  run        - Run development server"
 	@echo "  test       - Run tests"
 	@echo "  clean      - Clean build artifacts"
+	@echo "  clean-frontend - Clean frontend from api"
 	@echo "  deps       - Install dependencies"
 	@echo "  install    - Install to /usr/local/bin"
+	@echo "  after      - Clean up after builds"
 	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make dev       # Build development version"
 	@echo "  make all       # Build for all platforms"
-	@echo "  make package   # Create distribution packages"
+	@echo "  make package   # Build and create distribution packages"

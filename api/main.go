@@ -16,7 +16,7 @@ import (
 	"promptforge/internal/services"
 )
 
-//go:embed frontend/*
+//go:embed frontend
 var frontendFS embed.FS
 
 // Build-time variables
@@ -49,6 +49,13 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
+	// Serve embedded static files (must be after API routes)
+	frontendFiles, err := fs.Sub(frontendFS, "frontend")
+	if err != nil {
+		e.Logger.Fatal(err)
+	}
+	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(frontendFiles))))
+
 	// API Routes
 	api := e.Group("/api")
 	api.GET("/health", h.HealthCheck)
@@ -80,13 +87,6 @@ func main() {
 
 	// Provider configuration route
 	api.GET("/providers", h.GetProviders)
-
-	// Serve embedded static files (must be after API routes)
-	frontendFiles, err := fs.Sub(frontendFS, "frontend")
-	if err != nil {
-		e.Logger.Fatal(err)
-	}
-	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(frontendFiles))))
 
 	// Start server
 	port := os.Getenv("PORT")

@@ -13,7 +13,7 @@ fi
 if command -v make &> /dev/null; then
     echo "🏗️  Using Makefile for build..."
 
-    # Build development version using Makefile
+    # Build development version using Makefile (includes frontend preparation)
     make dev
 
     # Copy .env file to project root (where the binary will be)
