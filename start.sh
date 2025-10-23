@@ -10,6 +10,7 @@ if ! command -v go &> /dev/null; then
 fi
 
 # Navigate to API directory
+cp env.ollama.js frontend/.env.js
 cd api
 
 # Install dependencies if needed
@@ -25,4 +26,6 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo "================================"
 
-go run main.go 
+go build -o ../main main.go
+
+cd .. && ./main
