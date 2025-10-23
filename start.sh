@@ -10,7 +10,6 @@ if ! command -v go &> /dev/null; then
 fi
 
 # Navigate to API directory
-cp env.ollama.js frontend/.env.js
 cd api
 
 # Install dependencies if needed

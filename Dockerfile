@@ -34,7 +34,6 @@ COPY --from=builder /app/main .
 
 # Copy frontend files
 COPY frontend/ ./frontend/
-COPY env.ollama.js ./frontend/.env.js
 
 # Create directory for database
 RUN mkdir -p /data
