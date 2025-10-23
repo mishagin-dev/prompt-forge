@@ -25,6 +25,7 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo "================================"
 
-go build -o ../main main.go
+# Build the binary
+go build -o ../prompt-forge main.go
 
-cd .. && ./main
+cd .. && ./prompt-forge

@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 // Provider types
@@ -43,6 +46,13 @@ var AppConfig *Config
 
 // Initialize configuration from environment variables
 func InitConfig() {
+	// Load .env file - try multiple possible locations
+	err := loadEnvFile()
+	if err != nil {
+		log.Printf("Warning: Could not load .env file: %v", err)
+		log.Println("Note: Make sure .env file exists in the project root or set environment variables manually")
+	}
+
 	AppConfig = &Config{
 		DefaultProvider: getDefaultProvider(),
 		OpenAI: OpenAIConfig{
@@ -59,6 +69,19 @@ func InitConfig() {
 			BaseURL: getEnv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
 		},
 	}
+}
+
+// loadEnvFile tries to load .env file from current directory
+func loadEnvFile() error {
+	// Load .env file from current directory (same location as binary)
+	if err := godotenv.Load(".env"); err == nil {
+		log.Println("Successfully loaded .env file from current directory")
+		return nil
+	}
+
+	// If no .env file found, that's not necessarily an error
+	// Environment variables might be set directly in the system
+	return fmt.Errorf("no .env file found in current directory")
 }
 
 func getDefaultProvider() AIProvider {
