@@ -1,6 +1,6 @@
 services:
   promptforge:
-    image: ghcr.io/insaanimanav/prompt-forge:main-f9c6943
+    image: ghcr.io/mishagin-dev/prompt-forge:develop
     container_name: promptforge-test
     ports:
       - "8081:8080"

@@ -129,9 +129,10 @@ func (e *EvalGenerator) parseTestCasesFromText(response string, evalTypes []stri
 			}
 
 			difficulty := "medium"
-			if i%3 == 0 {
+			switch i % 3 {
+			case 0:
 				difficulty = "easy"
-			} else if i%3 == 2 {
+			case 2:
 				difficulty = "hard"
 			}
 
