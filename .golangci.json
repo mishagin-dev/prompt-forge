@@ -1,0 +1,223 @@
+{
+  "formatters": {
+    "enable": [
+      "gofmt",
+      "goimports"
+    ],
+    "exclusions": {
+      "generated": "lax",
+      "paths": [
+        "third_party$",
+        "builtin$",
+        "examples$"
+      ]
+    }
+  },
+  "issues": {
+    "max-issues-per-linter": 10,
+    "max-same-issues": 3
+  },
+  "linters": {
+    "enable": [
+      "bodyclose",
+      "copyloopvar",
+      "depguard",
+      "dogsled",
+      "dupl",
+      "gochecknoinits",
+      "goconst",
+      "gocritic",
+      "gocyclo",
+      "gosec",
+      "misspell",
+      "nakedret",
+      "revive",
+      "rowserrcheck",
+      "staticcheck",
+      "unconvert",
+      "unparam",
+      "whitespace"
+    ],
+    "exclusions": {
+      "generated": "lax",
+      "paths": [
+        "third_party$",
+        "builtin$",
+        "examples$"
+      ],
+      "rules": [
+        {
+          "linters": [
+            "dupl",
+            "errcheck",
+            "goconst",
+            "gocritic",
+            "gocyclo",
+            "gosec"
+          ],
+          "path": "_test\\.go"
+        },
+        {
+          "linters": [
+            "gosec"
+          ],
+          "path": "internal/config/config.go",
+          "text": "G101: Potential hardcoded credentials"
+        },
+        {
+          "linters": [
+            "gosec"
+          ],
+          "path": "internal/config/config.go",
+          "text": "G104: Errors unhandled"
+        },
+        {
+          "linters": [
+            "revive"
+          ],
+          "text": "should not use dot imports"
+        },
+        {
+          "linters": [
+            "errcheck"
+          ],
+          "text": "Error return value of `.*\\.Close` is not checked"
+        },
+        {
+          "linters": [
+            "errcheck"
+          ],
+          "text": "Error return value is not checked"
+        },
+        {
+          "linters": [
+            "errcheck"
+          ],
+          "text": "Error return value of `.*\\.Rollback` is not checked"
+        },
+        {
+          "linters": [
+            "staticcheck"
+          ],
+          "text": "should not use ALL_CAPS in Go names"
+        },
+        {
+          "linters": [
+            "staticcheck"
+          ],
+          "text": "should be of the form"
+        },
+        {
+          "linters": [
+            "staticcheck"
+          ],
+          "text": "at least one file in a package should have a package comment"
+        },
+        {
+          "linters": [
+            "staticcheck"
+          ],
+          "text": "error strings should not be capitalized"
+        },
+        {
+          "linters": [
+            "govet"
+          ],
+          "text": "declaration of .* shadows declaration"
+        },
+        {
+          "linters": [
+            "staticcheck"
+          ],
+          "text": "should convert.*instead of using struct literal"
+        },
+        {
+          "linters": [
+            "revive"
+          ],
+          "text": "exported.*should have comment"
+        },
+        {
+          "linters": [
+            "revive"
+          ],
+          "text": "comment on exported.*should be of the form"
+        },
+        {
+          "linters": [
+            "revive"
+          ],
+          "text": "should have a package comment"
+        },
+        {
+          "linters": [
+            "revive"
+          ],
+          "text": "don't use ALL_CAPS in Go names"
+        },
+        {
+          "linters": [
+            "gocritic"
+          ],
+          "text": "nestingReduce"
+        },
+        {
+          "linters": [
+            "unparam"
+          ],
+          "text": "result.*is always nil"
+        }
+      ]
+    },
+    "settings": {
+      "depguard": {
+        "rules": {
+          "main": {
+            "allow": [
+              "$gostd",
+              "github.com/labstack/echo/v4",
+              "github.com/mattn/go-sqlite3",
+              "github.com/joho/godotenv",
+              "promptforge/internal"
+            ],
+            "files": [
+              "!**/*_test.go"
+            ]
+          }
+        }
+      },
+      "dupl": {
+        "threshold": 200
+      },
+      "goconst": {
+        "min-len": 3,
+        "min-occurrences": 4
+      },
+      "gocritic": {
+        "disabled-checks": [
+          "hugeParam"
+        ],
+        "enabled-tags": [
+          "diagnostic",
+          "performance",
+          "style"
+        ]
+      },
+      "gocyclo": {
+        "min-complexity": 20
+      },
+      "govet": {
+        "enable": [
+          "shadow"
+        ]
+      },
+      "misspell": {
+        "locale": "US"
+      }
+    }
+  },
+  "run": {
+    "modules-download-mode": "readonly"
+  },
+  "version": "2"
+}

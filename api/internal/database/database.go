@@ -31,7 +31,7 @@ func PrepareDatabasePath(databasePath string) (string, error) {
 
 	// Create directory if it doesn't exist
 	if dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return "", fmt.Errorf("failed to create database directory %s: %v", dir, err)
 		}
 	}

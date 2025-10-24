@@ -48,11 +48,7 @@ var AppConfig *Config
 // Initialize configuration from environment variables
 func InitConfig() {
 	// Load .env file - try multiple possible locations
-	err := loadEnvFile()
-	if err != nil {
-		log.Printf("Warning: Could not load .env file: %v", err)
-		log.Println("Note: Make sure .env file exists in the project root or set environment variables manually")
-	}
+	loadEnvFile()
 
 	AppConfig = &Config{
 		DefaultProvider: getDefaultProvider(),
@@ -83,7 +79,9 @@ func loadEnvFile() error {
 
 	// If no .env file found, that's not necessarily an error
 	// Environment variables might be set directly in the system
-	return fmt.Errorf("no .env file found in current directory")
+	// Just log a debug message instead of returning an error
+	log.Println("No .env file found, using environment variables and defaults")
+	return nil
 }
 
 func getDefaultProvider() AIProvider {
