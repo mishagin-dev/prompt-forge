@@ -5,6 +5,10 @@ on:
     branches:
       - main
       - develop
+  push:
+    branches:
+      - main
+      - develop
     tags:
       - 'v*'
   workflow_dispatch:
@@ -12,6 +16,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: '1.21'
+  CACHE_VERSION: v1
 
 jobs:
   build-and-test:
@@ -19,13 +25,35 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      matrix:
+        platform: [ linux/amd64, linux/arm64 ]
+        include:
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: arm64
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: 🐹 Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
       - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: 📦 Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ matrix.platform }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.platform }}-
+            ${{ runner.os }}-buildx-
 
       - name: 🔧 Set lowercase image name
         id: image-name
@@ -35,7 +63,7 @@ jobs:
         id: meta
         run: |
           # Generate a simple tag for testing
-          TAG="test-${GITHUB_SHA::8}"
+          TAG="test-${GITHUB_SHA::8}-${{ matrix.arch }}"
           echo "tags=ghcr.io/${{ steps.image-name.outputs.value }}:${TAG}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
@@ -43,12 +71,12 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: false
           load: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
       - name: �� Test Docker image
         run: |
@@ -56,7 +84,7 @@ jobs:
           
           # Run the container
           echo "🚀 Starting container..."
-          docker run --rm -d --name promptforge-test -p 8080:8080 ${{ steps.meta.outputs.tags }}
+          docker run --rm -d --name promptforge-test-${{ matrix.arch }} -p 8080:8080 ${{ steps.meta.outputs.tags }}
           
           # Wait for service to be ready with active polling
           echo "⏳ Waiting for service to be ready..."
@@ -76,7 +104,7 @@ jobs:
           
           if [ $elapsed -ge $timeout ]; then
             echo "❌ Service failed to start within ${timeout}s"
-            docker logs promptforge-test
+            docker logs promptforge-test-${{ matrix.arch }}
             exit 1
           fi
           
@@ -97,7 +125,7 @@ jobs:
           
           # Cleanup
           echo "🧹 Cleaning up..."
-          docker stop promptforge-test
+          docker stop promptforge-test-${{ matrix.arch }}
           echo "✅ Docker image test passed"
 
       - name: 📊 Test summary
@@ -115,4 +143,15 @@ jobs:
           echo "### 🔧 Local Testing" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "docker run -p 8080:8080 ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY 
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    secrets:
+    concurrency:
+# === Global Configuration ===
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
