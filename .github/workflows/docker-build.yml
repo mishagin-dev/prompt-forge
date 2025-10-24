@@ -12,6 +12,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: '1.21'
+  CACHE_VERSION: v1
 
 jobs:
   build-and-push:
@@ -20,91 +22,187 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux/amd64
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            platform: linux/arm64
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            platform: linux/amd64
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            platform: linux/arm64
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+          - os: windows-latest
+            platform: linux/amd64
+            arch: amd64
+            goos: windows
+            goarch: amd64
 
     steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v4
+      # === Repository Setup ===
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v5
 
-    - name: 🐳 Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      # === Go Setup ===
+      - name: 🐹 Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: api/go.sum
 
-    - name: 🔐 Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      # === Docker Configuration ===
+      - name: 🐳 Set up Docker Buildx
+        if: matrix.goos == 'linux'
+        uses: docker/setup-buildx-action@v3
 
-    - name: 🔧 Set lowercase image name
-      id: image-name
-      run: echo "value=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+      - name: 📦 Cache Docker layers
+        if: matrix.goos == 'linux'
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ matrix.platform }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.platform }}-
+            ${{ runner.os }}-buildx-
 
-    - name: 🏷️ Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ steps.image-name.outputs.value }}
-        tags: |
-          type=ref,event=branch
-          type=sha,prefix=sha-
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
-        labels: |
-          org.opencontainers.image.title=PromptForge
-          org.opencontainers.image.description=AI prompt engineering workbench
-          org.opencontainers.image.vendor=PromptForge
-          org.opencontainers.image.licenses=GPL-3.0
+      - name: 🔍 Review dependencies
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          allow-licenses: MIT, Apache-2.0, BSD-3-Clause, GPL-3.0
+          deny-licenses: GPL-2.0, AGPL-3.0
+          comment-summary-in-pr: always
 
-    - name: 🔨 Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        build-args: |
-          BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
-          REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
+      - name: 🔍 Scan Go dependencies for vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          cd api
+          ~/go/bin/govulncheck ./...
 
-    - name: 📝 Generate deployment manifest
-      run: |
-        mkdir -p deployment
-        cat > deployment/docker-compose.yml << EOF
-        version: '3.8'
-        services:
-          promptforge:
-            image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
-            ports:
-              - "8080:8080"
-            environment:
-              - PORT=8080
-              - DATABASE_PATH=/data/promptforge.db
-            volumes:
-              - promptforge_data:/data
-            restart: unless-stopped
-            healthcheck:
-              test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
-              interval: 30s
-              timeout: 10s
-              retries: 3
-              start_period: 40s
+      - name: 🔍 Scan OS dependencies
+        run: |
+          go install github.com/aquasecurity/trivy@latest
+          ~/go/bin/trivy fs --security-checks vuln --format sarif --output trivy-fs.sarif .
 
-        volumes:
-          promptforge_data:
-        EOF
+      - name: 🔐 Log in to Container Registry
+        if: matrix.goos == 'linux'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: 📤 Upload deployment artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: deployment-manifests
-        path: deployment/
-        retention-days: 90
+      # === Image Metadata Configuration ===
+      - name: 🏷️ Extract Docker metadata
+        if: matrix.goos == 'linux'
+        id: docker-meta
+        uses: docker/metadata-action@v5
+        env:
+          IMAGE_FULL_NAME: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        with:
+          images: ${{ env.IMAGE_FULL_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.title=PromptForge
+            org.opencontainers.image.description=AI prompt engineering workbench
+            org.opencontainers.image.vendor=PromptForge
+            org.opencontainers.image.licenses=GPL-3.0
+
+      # === Docker Build and Push ===
+      - name: 🔨 Build and push Docker image
+        if: matrix.goos == 'linux'
+        uses: docker/build-push-action@v5
+        env:
+          METADATA_JSON: ${{ steps.docker-meta.outputs.json }}
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ steps.docker-meta.outputs.tags }}
+          labels: ${{ steps.docker-meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+          build-args: |
+            BUILDTIME=${{ fromJSON(env.METADATA_JSON).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ fromJSON(env.METADATA_JSON).labels['org.opencontainers.image.version'] }}
+            REVISION=${{ fromJSON(env.METADATA_JSON).labels['org.opencontainers.image.revision'] }}
+        timeout-minutes: 30
+        continue-on-error: false
+
+      # === Go Binary Build for non-Linux platforms ===
+      - name: 🏗️ Build Go binary for ${{ matrix.goos }}/${{ matrix.goarch }}
+        if: matrix.goos != 'linux'
+        run: |
+          cd api
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o promptforge-${{ matrix.goos }}-${{ matrix.goarch }} .
+          echo "✅ Go binary built for ${{ matrix.goos }}/${{ matrix.goarch }}"
+
+      # === Deployment Artifacts ===
+      - name: 📝 Generate deployment manifest
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        env:
+          PRIMARY_IMAGE_TAG: ${{ fromJSON(steps.docker-meta.outputs.json).tags[0] }}
+        run: |
+          mkdir -p deployment
+          cat > deployment/docker-compose.yml << EOF
+          version: '3.8'
+          services:
+            promptforge:
+              image: ${{ env.PRIMARY_IMAGE_TAG }}
+              ports:
+                - "8080:8080"
+              environment:
+                - PORT=8080
+                - DATABASE_PATH=/data/promptforge.db
+              volumes:
+                - promptforge_data:/data
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 40s
+          
+          volumes:
+            promptforge_data:
+          EOF
+
+      - name: 📤 Upload deployment artifacts
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-manifests
+          path: deployment/
+          retention-days: 90
+
+      - name: 📤 Upload Go binaries
+        if: matrix.goos != 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: promptforge-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: api/promptforge-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 30
 
   security-scan:
     name: 🛡️ Security Scan
@@ -115,81 +213,90 @@ jobs:
       security-events: write
 
     steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v4
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v5
 
-    - name: 🔧 Set lowercase image name for security scan
-      id: scan-image-name
-      run: echo "value=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+      - name: 🔧 Set lowercase image name for security scan
+        id: scan-image-name
+        run: echo "value=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
-    - name: 🔍 Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@0.28.0
-      with:
-        image-ref: ${{ env.REGISTRY }}/${{ steps.scan-image-name.outputs.value }}:latest
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-        severity: 'CRITICAL,HIGH,MEDIUM'
-        exit-code: '0'
-        ignore-unfixed: true
+      - name: 🔍 Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.scan-image-name.outputs.value }}:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+          ignore-unfixed: true
 
-    - name: 🔎 Check if SARIF file exists
-      run: |
-        if [ -f trivy-results.sarif ]; then
-          echo "✅ SARIF file generated successfully"
-          echo "File size: $(ls -lh trivy-results.sarif | awk '{print $5}')"
-          # Check if file has content
-          if [ -s trivy-results.sarif ]; then
-            echo "✅ SARIF file has content"
+      - name: 🔎 Check if SARIF file exists
+        run: |
+          if [ -f trivy-results.sarif ]; then
+            echo "✅ SARIF file generated successfully"
+            echo "File size: $(ls -lh trivy-results.sarif | awk '{print $5}')"
+            # Check if file has content
+            if [ -s trivy-results.sarif ]; then
+              echo "✅ SARIF file has content"
+            else
+              echo "⚠️ SARIF file is empty, creating minimal SARIF structure"
+              cat > trivy-results.sarif << 'EOF'
+          {
+            "version": "2.1.0",
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "runs": []
+          }
+          EOF
+            fi
           else
-            echo "⚠️ SARIF file is empty, creating minimal SARIF structure"
+            echo "❌ SARIF file not found"
+            ls -la
+            echo "Creating empty SARIF file"
             cat > trivy-results.sarif << 'EOF'
-        {
-          "version": "2.1.0",
-          "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-          "runs": []
-        }
-        EOF
+          {
+            "version": "2.1.0",
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "runs": []
+          }
+          EOF
           fi
-        else
-          echo "❌ SARIF file not found"
-          ls -la
-          echo "Creating empty SARIF file"
-          cat > trivy-results.sarif << 'EOF'
-        {
-          "version": "2.1.0",
-          "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-          "runs": []
-        }
-        EOF
-        fi
 
-    - name: 📤 Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
+      - name: 📤 Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
 
   notify:
     name: 📢 Notify
     runs-on: ubuntu-latest
-    needs: [build-and-push, security-scan]
+    needs: [ build-and-push, security-scan ]
     if: always()
 
     steps:
-    - name: 📨 Create deployment summary
-      run: |
-        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|-----------|---------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Docker Build | ${{ needs.build-and-push.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Security Scan | ${{ needs.security-scan.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        LOWERCASE_IMAGE=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')
-        echo "### 📦 Published Images" >> $GITHUB_STEP_SUMMARY
-        echo "- \`${{ env.REGISTRY }}/${LOWERCASE_IMAGE}:latest\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`${{ env.REGISTRY }}/${LOWERCASE_IMAGE}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔧 Quick Deploy" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-        echo "docker run -p 8080:8080 ${{ env.REGISTRY }}/${LOWERCASE_IMAGE}:latest" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY 
+      - name: 📨 Create deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.build-and-push.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          LOWERCASE_IMAGE=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')
+          echo "### 📦 Published Images" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${LOWERCASE_IMAGE}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${LOWERCASE_IMAGE}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔧 Quick Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -p 8080:8080 ${{ env.REGISTRY }}/${LOWERCASE_IMAGE}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+# === Global Configuration ===
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
