@@ -1,0 +1,52 @@
+# CI-optimized Dockerfile for faster builds
+FROM golang:1.25.3-alpine AS builder
+
+WORKDIR /app
+
+# Install minimal build dependencies
+RUN apk add --no-cache git ca-certificates gcc musl-dev
+
+# Copy go mod files first for better caching
+COPY api/go.mod api/go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY api/ .
+COPY frontend/ ./frontend/
+
+# Build for CI (no version info needed)
+ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -tags="sqlite_omit_load_extension" -o main .
+
+# Minimal final stage for CI
+FROM alpine:3.22.2
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata wget
+
+# Create user and directories
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup && \
+    mkdir -p /app /data && \
+    chown -R appuser:appgroup /app /data
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary and set permissions
+COPY --from=builder /app/main ./main
+RUN chown appuser:appgroup ./main
+
+# Switch to non-root user
+USER appuser
+
+EXPOSE 8080
+
+ENV PORT=8080
+ENV DATABASE_PATH=/data/promptforge.db
+ENV GIN_MODE=release
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1"]
+
+CMD ["./main"]
