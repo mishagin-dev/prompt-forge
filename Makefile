@@ -3,7 +3,14 @@
 
 # Variables
 APP_NAME = promptforge
-VERSION = $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+# Clean version from latest tag (only v1.2.3 format)
+VERSION = $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "1.0.0")
+# If on main branch and no new tag, increment patch version
+ifeq ($(shell git branch --show-current),main)
+ifeq ($(shell git describe --tags --exact-match 2>/dev/null || echo "no-tag"),no-tag)
+VERSION = $(shell git describe --tags --abbrev=0 2>/dev/null | awk -F. '{print $$1"."$$2"."$$3+1}' || echo "1.0.0")
+endif
+endif
 BUILD_TIME = $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS = -ldflags="-X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)"
 
@@ -103,23 +110,64 @@ install: build
 package: all
 	@echo "📦 Creating distribution packages..."
 	@mkdir -p $(BUILD_DIR)/packages
+	@# Windows package with ZIP format and proper structure
 	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64
 	@cp $(DIST_DIR)/windows/$(APP_NAME).exe $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/
 	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/.env
-	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-windows-amd64.tar.gz $(APP_NAME)-windows-amd64/
+	@# Add Windows batch script
+	@echo '@echo off' > $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@echo 'echo Starting PromptForge...' >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@echo 'echo.' >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@echo 'echo The application will create a SQLite database in this directory.' >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@echo 'echo Make sure your .env file is configured with API keys.' >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@echo 'echo.' >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@echo 'promptforge.exe' >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@echo 'pause' >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/start.bat
+	@# Create comprehensive README
+	@echo "PromptForge $(VERSION)" > $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "=== INSTALLATION ===" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "Windows:" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "1. Extract the ZIP file to a permanent location" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "2. Edit the .env file and add your API keys" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "3. Double-click start.bat OR run promptforge.exe from command line" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "4. Open http://localhost:8080 in your browser" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "=== IMPORTANT NOTES ===" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "- The binary MUST run from the extracted directory" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "- SQLite database (promptforge.db) will be created in the same directory" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "- The .env file must be in the same directory as the binary" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "- Do NOT move the binary after the database is created" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "=== TROUBLESHOOTING ===" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "If the application can't find its configuration:" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "1. Ensure you're running from the extracted directory" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "2. Check that .env file exists and is properly configured" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@echo "3. Run as Administrator if you encounter permission issues" >> $(BUILD_DIR)/packages/$(APP_NAME)-windows-amd64/README.txt
+	@cd $(BUILD_DIR)/packages && zip -r $(APP_NAME)-$(VERSION)-windows-amd64.zip $(APP_NAME)-windows-amd64/
+	@# Linux package with tar.gz format
 	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64
 	@cp $(DIST_DIR)/linux/$(APP_NAME) $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64/
 	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-linux-amd64/.env
 	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-linux-amd64.tar.gz $(APP_NAME)-linux-amd64/
+	@# macOS Intel package with tar.gz format
 	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64
 	@cp $(DIST_DIR)/macos/$(APP_NAME) $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64/
 	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-darwin-amd64/.env
 	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-darwin-amd64.tar.gz $(APP_NAME)-darwin-amd64/
+	@# macOS Apple Silicon package with tar.gz format
 	@mkdir -p $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64
 	@cp $(DIST_DIR)/macos/$(APP_NAME)-arm64 $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64/
 	@cp .env.example $(BUILD_DIR)/packages/$(APP_NAME)-darwin-arm64/.env
 	@cd $(BUILD_DIR)/packages && tar -czf $(APP_NAME)-$(VERSION)-darwin-arm64.tar.gz $(APP_NAME)-darwin-arm64/
 	@echo "✅ Distribution packages created in $(BUILD_DIR)/packages/"
+	@echo "📁 Windows: $(APP_NAME)-$(VERSION)-windows-amd64.zip"
+	@echo "📁 Linux: $(APP_NAME)-$(VERSION)-linux-amd64.tar.gz"
+	@echo "📁 macOS Intel: $(APP_NAME)-$(VERSION)-darwin-amd64.tar.gz"
+	@echo "📁 macOS Apple Silicon: $(APP_NAME)-$(VERSION)-darwin-arm64.tar.gz"
 	@ls -la $(BUILD_DIR)/packages/
 
 # Show help

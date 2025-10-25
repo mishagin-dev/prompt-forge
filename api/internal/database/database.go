@@ -47,6 +47,19 @@ func NewDatabase() (*Database, error) {
 		databasePath = config.AppConfig.DatabasePath
 	}
 
+	// Get binary directory and ensure database is created there
+	execPath, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get executable path: %v", err)
+	}
+
+	binDir := filepath.Dir(execPath)
+
+	// If database path is relative, make it relative to binary directory
+	if !filepath.IsAbs(databasePath) {
+		databasePath = filepath.Join(binDir, databasePath)
+	}
+
 	// Prepare database path (create directories if needed)
 	fullPath, err := PrepareDatabasePath(databasePath)
 	if err != nil {

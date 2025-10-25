@@ -52,6 +52,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: 💾 Check disk space
+        run: |
+          echo "Available disk space:"
+          df -h
+          echo "Memory usage:"
+          free -h
+
       - name: 🐹 Set up Go
         uses: actions/setup-go@v6
         with:
@@ -59,17 +66,25 @@ jobs:
           cache: true
           cache-dependency-path: api/go.sum
 
-      - name: 🏷️ Extract version
+      - name: 🏷️ Extract version (clean format)
         id: version
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
-          else
+          elif [ "${{ github.event.inputs.version }}" != "" ]; then
             VERSION="${{ github.event.inputs.version }}"
+          else
+            # Auto-detect clean version from latest tag only
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+            # If on main branch without new tag, increment patch version
+            if [ "${{ github.ref_name }}" = "main" ] && [ "${{ github.ref_type }}" != "tag" ]; then
+              VERSION=$(echo $VERSION | awk -F. '{print $1"."$2"."$3+1}')
+            fi
           fi
           VERSION=${VERSION#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "📋 Clean version: ${VERSION}"
 
       - name: 🔧 Set build variables
         id: build-vars
@@ -83,6 +98,8 @@ jobs:
         run: |
           cd api && go mod tidy
           cp -r ../frontend .
+          # Cleanup frontend from api after build
+          trap 'rm -rf api/frontend' EXIT
 
       - name: 🔨 Build binary
         run: |
@@ -91,23 +108,91 @@ jobs:
             -ldflags="-X main.version=${{ steps.version.outputs.version }} -X main.buildTime=${{ steps.build-vars.outputs.build_time }}" \
             -o ../${{ steps.build-vars.outputs.binary_name }} main.go
 
-      - name: 📁 Create package
+      - name: 📁 Create package with proper directory structure
         run: |
           mkdir -p packages/${{ steps.build-vars.outputs.package_name }}
           cp ${{ steps.build-vars.outputs.binary_name }} packages/${{ steps.build-vars.outputs.package_name }}/
           cp .env.example packages/${{ steps.build-vars.outputs.package_name }}/.env
+          
+          # Add Windows-specific batch script for proper working directory
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            cat > packages/${{ steps.build-vars.outputs.package_name }}/start.bat << 'EOF'
+@echo off
+echo Starting PromptForge...
+echo.
+echo The application will create a SQLite database in this directory.
+echo Make sure your .env file is configured with API keys.
+echo.
+promptforge.exe
+pause
+EOF
+            # Set proper permissions for Windows batch file
+            chmod 644 packages/${{ steps.build-vars.outputs.package_name }}/start.bat
+          fi
+          
+          # Add comprehensive README
+          cat > packages/${{ steps.build-vars.outputs.package_name }}/README.txt << 'EOF'
+PromptForge ${{ steps.version.outputs.version }}
+
+=== INSTALLATION ===
+
+Windows:
+1. Extract the ZIP file to a permanent location
+2. Edit the .env file and add your API keys
+3. Double-click start.bat OR run promptforge.exe from command line
+4. Open http://localhost:8080 in your browser
+
+=== IMPORTANT NOTES ===
+
+- The binary MUST run from the extracted directory
+- SQLite database (promptforge.db) will be created in the same directory
+- The .env file must be in the same directory as the binary
+- Do NOT move the binary after the database is created
+
+=== TROUBLESHOOTING ===
+
+If the application can't find its configuration:
+1. Ensure you're running from the extracted directory
+2. Check that .env file exists and is properly configured
+3. Run as Administrator if you encounter permission issues
+
+=== API KEYS REQUIRED ===
+
+Edit .env file and add at least one of:
+- OPENAI_API_KEY=your_openai_key_here
+- AZURE_OPENAI_API_KEY=your_azure_key_here
+- ANTHROPIC_API_KEY=your_anthropic_key_here
+
+EOF
 
       - name: 📦 Create archive
         run: |
           cd packages
-          tar -czf ${{ steps.build-vars.outputs.package_name }}.tar.gz ${{ steps.build-vars.outputs.package_name }}/
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            # Use ZIP format for Windows
+            zip -r ${{ steps.build-vars.outputs.package_name }}.zip ${{ steps.build-vars.outputs.package_name }}/
+          else
+            # Use tar.gz for Unix systems
+            tar -czf ${{ steps.build-vars.outputs.package_name }}.tar.gz ${{ steps.build-vars.outputs.package_name }}/
+          fi
+          
+          # Cleanup source package directory after archive creation
+          rm -rf ${{ steps.build-vars.outputs.package_name }}
 
       - name: 📤 Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.build-vars.outputs.package_name }}
-          path: packages/${{ steps.build-vars.outputs.package_name }}.tar.gz
+          path: packages/${{ steps.build-vars.outputs.package_name }}.${{ matrix.os == 'windows' && 'zip' || 'tar.gz' }}
           retention-days: 30
+
+      - name: 🧹 Cleanup build cache
+        if: always()
+        run: |
+          # Clean Go build cache
+          go clean -cache -modcache -testcache 2>/dev/null || true
+          # Clean any remaining temporary files
+          rm -rf api/frontend packages/ 2>/dev/null || true
 
   create-release:
     name: 🚀 Create Release
@@ -128,26 +213,31 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.version }}
           name: Release ${{ github.event.inputs.version }}
-          body: |
-            ## 🚀 PromptForge ${{ github.event.inputs.version }}
-            
-            ### 📦 Downloads
-            This release includes pre-built binaries for:
-            - Windows (amd64)
-            - Linux (amd64) 
-            - macOS (Intel amd64)
-            - macOS (Apple Silicon arm64)
-            
-            Each package includes:
-            - The PromptForge binary
-            - .env configuration file (ready to use)
-            
-            ### 🔧 Installation
-            1. Download the appropriate package for your platform
-            2. Extract the archive
-            3. Edit `.env` file and configure your API keys
-            4. Run the binary
-          files: ./artifacts/**/*.tar.gz
+           body: |
+             ## 🚀 PromptForge ${{ github.event.inputs.version }}
+             
+             ### 📦 Downloads
+             This release includes pre-built binaries for:
+             - Windows (amd64) - ZIP format
+             - Linux (amd64) - tar.gz format
+             - macOS (Intel amd64) - tar.gz format
+             - macOS (Apple Silicon arm64) - tar.gz format
+             
+             Each package includes:
+             - The PromptForge binary
+             - .env configuration file (ready to use)
+             - README with installation instructions
+             
+             ### 🔧 Installation
+             1. Download the appropriate package for your platform
+             2. Extract the archive
+             3. Edit `.env` file and configure your API keys
+             4. Run the binary from the extracted directory
+             
+             ### 🪟 Windows Notes
+             - The Windows binary creates its database in the current directory
+             - Run from the extracted directory to ensure proper .env file reading
+           files: ./artifacts/**/*.{tar.gz,zip}
           draft: false
           prerelease: false
 
@@ -165,10 +255,10 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: 📤 Upload to existing release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ./artifacts/**/*.tar.gz
+       - name: 📤 Upload to existing release
+         uses: softprops/action-gh-release@v2
+         with:
+           files: ./artifacts/**/*.{tar.gz,zip}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

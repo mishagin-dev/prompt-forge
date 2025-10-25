@@ -55,6 +55,7 @@ RUN mkdir -p /data && \
 
 # Copy binary from builder stage
 COPY --from=builder /app/main .
+COPY .env.example .env
 
 # Change ownership of binary
 RUN chown appuser:appgroup ./main

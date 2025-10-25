@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
@@ -52,7 +53,7 @@ func InitConfig() {
 
 	AppConfig = &Config{
 		DefaultProvider: getDefaultProvider(),
-		DatabasePath:    getEnv("DATABASE_PATH", ".db/promptforge.db"),
+		DatabasePath:    getEnv("DATABASE_PATH", "promptforge.db"),
 		OpenAI: OpenAIConfig{
 			APIKey:  getEnv("OPENAI_API_KEY", ""),
 			BaseURL: getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -69,18 +70,28 @@ func InitConfig() {
 	}
 }
 
-// loadEnvFile tries to load .env file from current directory
+// loadEnvFile tries to load .env file from binary directory
 func loadEnvFile() error {
-	// Load .env file from current directory (same location as binary)
-	if err := godotenv.Load(".env"); err == nil {
-		log.Println("Successfully loaded .env file from current directory")
+	// Get the directory where the binary is located
+	execPath, err := os.Executable()
+	if err != nil {
+		log.Printf("Failed to get executable path: %v", err)
+		return err
+	}
+
+	binDir := filepath.Dir(execPath)
+	envPath := filepath.Join(binDir, ".env")
+
+	// Load .env file from binary directory
+	if err := godotenv.Load(envPath); err == nil {
+		log.Printf("Successfully loaded .env file from: %s", envPath)
 		return nil
 	}
 
 	// If no .env file found, that's not necessarily an error
 	// Environment variables might be set directly in the system
 	// Just log a debug message instead of returning an error
-	log.Println("No .env file found, using environment variables and defaults")
+	log.Printf("No .env file found at %s, using environment variables and defaults", envPath)
 	return nil
 }
 

@@ -33,9 +33,11 @@ RUN addgroup -g 1001 -S appgroup && \
 # Set working directory
 WORKDIR /app
 
-# Copy binary and set permissions
+# Copy binary and .env file, set permissions
 COPY --from=builder /app/main ./main
-RUN chown appuser:appgroup ./main
+COPY .env.example ./.env
+RUN mkdir -p /data && \
+    chown -R appuser:appgroup /app /data
 
 # Switch to non-root user
 USER appuser
@@ -43,7 +45,7 @@ USER appuser
 EXPOSE 8080
 
 ENV PORT=8080
-ENV DATABASE_PATH=/data/promptforge.db
+ENV DATABASE_PATH=/data/db/promptforge.db
 ENV GIN_MODE=release
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
