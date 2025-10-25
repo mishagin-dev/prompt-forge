@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -15,9 +14,6 @@ import (
 	"promptforge/internal/handlers"
 	"promptforge/internal/services"
 )
-
-//go:embed frontend
-var frontendFS embed.FS
 
 // Build-time variables
 var version = "dev"
@@ -49,12 +45,8 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	// Serve embedded static files (must be after API routes)
-	frontendFiles, err := fs.Sub(frontendFS, "frontend")
-	if err != nil {
-		e.Logger.Fatal(err)
-	}
-	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(frontendFiles))))
+	// Serve static files (using file system - will be copied during build)
+	e.GET("/*", echo.WrapHandler(http.FileServer(http.Dir("./static"))))
 
 	// API Routes
 	api := e.Group("/api")

@@ -54,15 +54,8 @@ jobs:
       - name: 📁 Prepare frontend
         if: steps.changes.outputs.frontend == 'true'
         run: |
-          if [ -d "frontend" ] && [ "$(ls -A frontend)" ]; then
-            echo "Frontend directory found with files, copying to api/"
-            cp -r frontend api/
-            # Cleanup frontend from api after tests
-            trap 'rm -rf api/frontend' EXIT
-          else
-            echo "Frontend directory empty or not found, skipping preparation"
-            echo "This is normal when frontend files were deleted in this commit"
-          fi
+          # Frontend preparation no longer needed with file system approach
+          echo "✅ Frontend preparation skipped - using file system for static files"
 
       - name: 🧪 Run Go tests
         if: steps.changes.outputs.go == 'true'
@@ -120,7 +113,7 @@ jobs:
         if: always() && steps.changes.outputs.go == 'true'
         run: |
           # Clean test artifacts
-          rm -f api/coverage.out api/frontend -rf 2>/dev/null || true
+          rm -f api/coverage.out 2>/dev/null || true
           go clean -testcache 2>/dev/null || true
 
   # === Docker Build & Test (conditional) ===
