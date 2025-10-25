@@ -54,9 +54,15 @@ jobs:
       - name: 📁 Prepare frontend
         if: steps.changes.outputs.frontend == 'true'
         run: |
-          cp -r frontend api/
-          # Cleanup frontend from api after tests
-          trap 'rm -rf api/frontend' EXIT
+          if [ -d "frontend" ] && [ "$(ls -A frontend)" ]; then
+            echo "Frontend directory found with files, copying to api/"
+            cp -r frontend api/
+            # Cleanup frontend from api after tests
+            trap 'rm -rf api/frontend' EXIT
+          else
+            echo "Frontend directory empty or not found, skipping preparation"
+            echo "This is normal when frontend files were deleted in this commit"
+          fi
 
       - name: 🧪 Run Go tests
         if: steps.changes.outputs.go == 'true'

@@ -97,9 +97,14 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           cd api && go mod tidy
-          cp -r ../frontend .
-          # Cleanup frontend from api after build
-          trap 'rm -rf api/frontend' EXIT
+          if [ -d "../frontend" ]; then
+            echo "Frontend directory found, copying to api/"
+            cp -r ../frontend .
+            # Cleanup frontend from api after build
+            trap 'rm -rf api/frontend' EXIT
+          else
+            echo "Frontend directory not found, continuing without it"
+          fi
 
       - name: 🔨 Build binary
         run: |
