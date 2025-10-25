@@ -498,7 +498,13 @@ func TestNewDatabaseWithCustomPath(t *testing.T) {
 	// Test NewDatabase with a custom path
 	testDir := "test_db_dir"
 	testFile := "test.db"
-	testPath := filepath.Join(testDir, testFile)
+
+	// Get current working directory and create absolute path
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	testPath := filepath.Join(wd, testDir, testFile)
 
 	// Clean up
 	defer func() {
